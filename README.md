@@ -1,4 +1,4 @@
-# callaway_platfrom
+# callaway_platform
 
 # ⛳ Callaway Sales Analytics Platform
 
