@@ -1,0 +1,242 @@
+name: CALLAWAY_SALES_PERFORMANCE
+description: Callaway golf equipment sales analytics across US states, channels, and product categories
+tables:
+  - name: PRODUCTS
+    description: Callaway product catalog including clubs, balls, bags, and apparel
+    base_table:
+      database: CALLAWAY_PLATFORM
+      schema: PUBLIC
+      table: PRODUCTS
+    primary_key:
+      columns:
+        - PRODUCT_ID
+    unique_keys:
+      - columns:
+          - SKU
+    dimensions:
+      - name: BRAND
+        description: Brand name (CALLAWAY, ODYSSEY, TRAVISMATHEW)
+        expr: BRAND
+        data_type: VARCHAR(50)
+        sample_values:
+          - CALLAWAY
+          - ODYSSEY
+          - TRAVISMATHEW
+      - name: CATEGORY
+        description: Main product category (CLUBS, BALLS, BAGS, APPAREL)
+        expr: CATEGORY
+        data_type: VARCHAR(50)
+        sample_values:
+          - CLUBS
+          - BALLS
+          - BAGS
+          - APPAREL
+      - name: IS_ACTIVE
+        description: Whether product is currently active
+        expr: IS_ACTIVE
+        data_type: BOOLEAN
+      - name: PRODUCT_ID
+        description: Unique identifier for each product in the catalog
+        expr: PRODUCT_ID
+        data_type: NUMBER(38,0)
+        unique: true
+      - name: PRODUCT_NAME
+        description: Full name of the product
+        expr: PRODUCT_NAME
+        data_type: VARCHAR(200)
+        sample_values:
+          - Paradym Ai Smoke MAX Driver
+          - Chrome Soft Golf Balls (12 pack)
+          - Apex 24 Irons (4-PW)
+      - name: SKU
+        description: Stock keeping unit identifier for inventory management
+        expr: SKU
+        data_type: VARCHAR(50)
+        unique: true
+        sample_values:
+          - DR-PARDM-2024
+          - DR-PARDM-LS24
+          - DR-BBERTHA-23
+      - name: SUBCATEGORY
+        description: Product subcategory (DRIVERS, IRONS, WEDGES, etc.)
+        expr: SUBCATEGORY
+        data_type: VARCHAR(50)
+        sample_values:
+          - DRIVERS
+          - IRONS
+          - WEDGES
+          - PUTTERS
+    facts:
+      - name: COST
+        description: Cost to produce/purchase the product
+        expr: COST
+        data_type: NUMBER(10,2)
+        default_aggregation: avg
+      - name: PRICE
+        description: Retail price of the product
+        expr: PRICE
+        data_type: NUMBER(10,2)
+        default_aggregation: avg
+    time_dimensions:
+      - name: LAUNCH_DATE
+        description: Date when product was launched
+        expr: LAUNCH_DATE
+        data_type: DATE
+  - name: SALES_DATA
+    description: Sales transactions with location, channel, and customer information
+    base_table:
+      database: CALLAWAY_PLATFORM
+      schema: PUBLIC
+      table: SALES_DATA
+    primary_key:
+      columns:
+        - SALE_ID
+    dimensions:
+      - name: CHANNEL
+        description: Sales channel (RETAIL, ONLINE, PRO_SHOP)
+        expr: CHANNEL
+        data_type: VARCHAR(50)
+        sample_values:
+          - RETAIL
+          - ONLINE
+          - PRO_SHOP
+      - name: CUSTOMER_TYPE
+        description: Type of customer (CONSUMER, CORPORATE, PRO)
+        expr: CUSTOMER_TYPE
+        data_type: VARCHAR(50)
+        sample_values:
+          - CONSUMER
+          - CORPORATE
+          - PRO
+      - name: PRODUCT_ID
+        description: Reference to product sold
+        expr: PRODUCT_ID
+        data_type: NUMBER(38,0)
+      - name: REGION
+        description: Geographic region (WEST, EAST, SOUTH, MIDWEST)
+        expr: REGION
+        data_type: VARCHAR(50)
+        sample_values:
+          - WEST
+          - EAST
+          - SOUTH
+          - MIDWEST
+      - name: SALE_ID
+        description: Unique identifier for each sales transaction
+        expr: SALE_ID
+        data_type: NUMBER(38,0)
+        unique: true
+      - name: STATE
+        description: US state where sale occurred
+        expr: STATE
+        data_type: VARCHAR(50)
+        sample_values:
+          - California
+          - Florida
+          - Texas
+          - New York
+          - Montana
+    facts:
+      - name: DISCOUNT_PERCENT
+        description: Discount percentage applied
+        expr: DISCOUNT_PERCENT
+        data_type: NUMBER(5,2)
+        default_aggregation: avg
+      - name: NET_AMOUNT
+        description: Total sale amount after discounts (revenue)
+        expr: NET_AMOUNT
+        data_type: NUMBER(10,2)
+        default_aggregation: sum
+      - name: QUANTITY
+        description: Number of units sold
+        expr: QUANTITY
+        data_type: NUMBER(38,0)
+        default_aggregation: sum
+      - name: TOTAL_AMOUNT
+        description: Total sale amount before discounts
+        expr: TOTAL_AMOUNT
+        data_type: NUMBER(10,2)
+        default_aggregation: sum
+      - name: UNIT_PRICE
+        description: Price per unit at time of sale
+        expr: UNIT_PRICE
+        data_type: NUMBER(10,2)
+        default_aggregation: avg
+    time_dimensions:
+      - name: SALE_DATE
+        description: Date of the sale transaction
+        expr: SALE_DATE
+        data_type: DATE
+relationships:
+  - name: SALES_TO_PRODUCTS
+    left_table: SALES_DATA
+    right_table: PRODUCTS
+    relationship_columns:
+      - left_column: PRODUCT_ID
+        right_column: PRODUCT_ID
+    relationship_type: many_to_one
+    join_type: inner
+verified_queries:
+  - name: top_selling_products
+    question: What are the top 5 best-selling products by revenue?
+    sql: |
+      SELECT 
+        p.PRODUCT_NAME,
+        p.CATEGORY,
+        p.BRAND,
+        SUM(s.QUANTITY) as UNITS_SOLD,
+        SUM(s.NET_AMOUNT) as TOTAL_REVENUE
+      FROM SALES_DATA s
+      JOIN PRODUCTS p ON s.PRODUCT_ID = p.PRODUCT_ID
+      GROUP BY p.PRODUCT_NAME, p.CATEGORY, p.BRAND
+      ORDER BY TOTAL_REVENUE DESC
+      LIMIT 5
+  - name: state_performance_comparison
+    question: Compare sales performance between California, Florida, and Texas
+    sql: |
+      SELECT 
+        STATE,
+        COUNT(DISTINCT SALE_ID) as TOTAL_TRANSACTIONS,
+        SUM(QUANTITY) as UNITS_SOLD,
+        SUM(NET_AMOUNT) as TOTAL_REVENUE,
+        AVG(NET_AMOUNT) as AVG_ORDER_VALUE
+      FROM SALES_DATA
+      WHERE STATE IN ('California', 'Florida', 'Texas')
+      GROUP BY STATE
+      ORDER BY TOTAL_REVENUE DESC
+  - name: monthly_revenue_trend
+    question: Show me monthly revenue trends for 2024
+    sql: |
+      SELECT 
+        DATE_TRUNC('MONTH', SALE_DATE) as MONTH,
+        SUM(NET_AMOUNT) as REVENUE
+      FROM SALES_DATA
+      WHERE YEAR(SALE_DATE) = 2024
+      GROUP BY DATE_TRUNC('MONTH', SALE_DATE)
+      ORDER BY MONTH
+  - name: profit_margin_by_category
+    question: Which product category has the highest profit margin?
+    sql: |
+      SELECT 
+        p.CATEGORY,
+        SUM(s.NET_AMOUNT) as REVENUE,
+        SUM(s.QUANTITY * p.COST) as TOTAL_COST,
+        SUM(s.NET_AMOUNT) - SUM(s.QUANTITY * p.COST) as PROFIT,
+        ((SUM(s.NET_AMOUNT) - SUM(s.QUANTITY * p.COST)) / NULLIF(SUM(s.NET_AMOUNT), 0)) * 100 as PROFIT_MARGIN
+      FROM SALES_DATA s
+      JOIN PRODUCTS p ON s.PRODUCT_ID = p.PRODUCT_ID
+      GROUP BY p.CATEGORY
+      ORDER BY PROFIT_MARGIN DESC
+  - name: channel_performance
+    question: How do online sales compare to retail and pro shop sales?
+    sql: |-
+      SELECT 
+        CHANNEL,
+        COUNT(DISTINCT SALE_ID) as TRANSACTIONS,
+        SUM(QUANTITY) as UNITS_SOLD,
+        SUM(NET_AMOUNT) as REVENUE,
+        AVG(NET_AMOUNT) as AVG_ORDER_VALUE,
+        (SUM(NET_AMOUNT) / (SELECT SUM(NET_AMOUNT) FROM SALES_DATA)) * 100 as REVENUE_PERCENTAGE
+      FROM SALES_DATA
+      GROUP BY CHANNEL
+      ORDER BY REVENUE DESC
